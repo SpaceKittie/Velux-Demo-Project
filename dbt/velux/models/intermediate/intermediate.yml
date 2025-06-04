@@ -1,0 +1,119 @@
+version: 2
+
+models:
+  - name: int_iot_data_unpivotted
+    description: "Transforms wide-format IoT data into a long format, with one row per sensor reading. Classifies room and sensor type."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: event_timestamp
+        description: "Timestamp of the IoT sensor reading."
+        data_type: timestamp_ntz
+        tests:
+          - not_null
+      - name: country
+        description: "Country where the IoT device is located."
+        data_type: text
+        tests:
+          - not_null
+      - name: city
+        description: "City where the IoT device is located."
+        data_type: text
+        tests:
+          - not_null
+      - name: device_id
+        description: "Unique identifier for the IoT device."
+        data_type: text
+        tests:
+          - not_null
+      - name: room
+        description: "Room associated with the sensor reading (e.g., bedroom, kitchen, outdoor)."
+        data_type: text
+        tests:
+          - not_null
+      - name: sensor_type
+        description: "Type of sensor (e.g., co2, relative_humidity, temperature) and its unit."
+        data_type: text
+        tests:
+          - not_null
+      - name: sensor_value
+        description: "The actual value recorded by the sensor."
+        data_type: float
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [event_timestamp, device_id, room, sensor_type]
+
+  - name: int_iot_data_with_weather
+    description: "Enriches unpivotted IoT sensor data with corresponding hourly weather information based on location and time."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: event_timestamp
+        description: "Timestamp of the IoT sensor reading."
+        data_type: timestamp_ntz
+        tests:
+          - not_null
+      - name: country
+        description: "Country where the IoT device is located."
+        data_type: text
+        tests:
+          - not_null
+      - name: city
+        description: "City where the IoT device is located."
+        data_type: text
+        tests:
+          - not_null
+      - name: device_id
+        description: "Unique identifier for the IoT device."
+        data_type: text
+        tests:
+          - not_null
+      - name: room
+        description: "Room associated with the sensor reading."
+        data_type: text
+        tests:
+          - not_null
+      - name: sensor_type
+        description: "Type of sensor and its unit."
+        data_type: text
+        tests:
+          - not_null
+      - name: sensor_value
+        description: "The actual value recorded by the sensor."
+        data_type: float
+        tests:
+          - not_null
+      - name: outdoor_temperature_celsius
+        description: "Outdoor temperature in Celsius from weather data."
+        data_type: float
+      - name: dew_point_temperature_celsius
+        description: "Dew point temperature in Celsius from weather data."
+        data_type: float
+      - name: mean_sea_level_pressure_hpa
+        description: "Mean sea level pressure in hPa from weather data."
+        data_type: float
+      - name: wind_speed_ms
+        description: "Wind speed in m/s from weather data."
+        data_type: float
+      - name: visibility_km
+        description: "Visibility in km from weather data."
+        data_type: float
+      - name: solar_irradiance_w_m2
+        description: "Solar irradiance in W/m2 from weather data."
+        data_type: float
+      - name: uv_index
+        description: "UV index from weather data."
+        data_type: float
+      - name: sunshine_duration_minutes
+        description: "Sunshine duration in minutes from weather data."
+        data_type: float
+      - name: precipitation_type_description
+        description: "Precipitation type from weather data."
+        data_type: text
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [event_timestamp, device_id, room, sensor_type]

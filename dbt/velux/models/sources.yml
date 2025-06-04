@@ -1,0 +1,16 @@
+version: 2
+
+sources:
+  - name: accuweather
+    database: SAMPLE_OF_ACCUWEATHERS_HISTORICAL_WEATHER_DATA
+    schema: HISTORICAL
+    tables:
+      - name: TOP_CITY_HOURLY_METRIC
+        description: "Source table for AccuWeather hourly weather metrics."
+
+  - name: iot_data
+    database: velux_dev
+    schema: raw
+    tables:
+      - name: iot_data
+        description: "Source table for IoT data."

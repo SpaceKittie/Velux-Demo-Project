@@ -1,0 +1,112 @@
+version: 2
+
+models:
+  - name: stg_accuweather_hourly
+    description: "Stages hourly weather data from AccuWeather Snowflake Marketplace source, providing weather metrics for various cities."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: weather_timestamp
+        description: "Timestamp of the weather reading."
+        data_type: timestamp_ntz
+        tests:
+          - not_null
+      - name: city_name
+        description: "Name of the city for the weather reading."
+        data_type: text
+        tests:
+          - not_null
+      - name: country_code
+        description: "Country code for weather reading."
+        data_type: text
+        tests:
+          - not_null
+      - name: outdoor_temperature_celsius
+        description: "Outdoor temperature in Celsius."
+        data_type: float
+      - name: dew_point_temperature_celsius
+        description: "Dew point temperature in Celsius."
+        data_type: float
+      - name: mean_sea_level_pressure_hpa
+        description: "Mean sea level pressure in hPa."
+        data_type: float
+      - name: wind_speed_ms
+        description: "Wind speed in meters per second."
+        data_type: float
+      - name: visibility_km
+        description: "Visibility in kilometers."
+        data_type: float
+      - name: solar_irradiance_w_m2
+        description: "Solar irradiance in Watts per square meter."
+        data_type: float
+      - name: uv_index
+        description: "UV index."
+        data_type: float
+      - name: sunshine_duration_minutes
+        description: "Duration of sunshine in minutes."
+        data_type: float
+      - name: precipitation_type_description
+        description: "Description of precipitation type."
+        data_type: text
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [weather_timestamp, city_name, country_code]
+
+  - name: stg_iot_data
+    description: "Stages raw IoT sensor data, providing various readings per device and timestamp. This model represents the wide format of the source data."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: event_timestamp
+        description: "Timestamp of the IoT sensor reading."
+        data_type: timestamp_ntz
+        tests:
+          - not_null
+      - name: country
+        description: "Country where the IoT device is located."
+        data_type: text
+        tests:
+          - not_null 
+      - name: city
+        description: "City where the IoT device is located."
+        data_type: text
+        tests:
+          - not_null
+      - name: device_id
+        description: "Unique identifier for the IoT device."
+        data_type: text
+        tests:
+          - not_null
+        meta:
+          snowflake_tags:
+            GOV.TAGS.data_sensitivity: 'confidential'
+            GOV.TAGS.requires_masking: 'true'
+      - name: co2_bedroom_ppm
+        description: "CO2 level in bedroom (parts per million)."
+        data_type: float 
+      - name: co2_kitchen_ppm
+        description: "CO2 level in kitchen (parts per million)."
+        data_type: float
+      - name: rh_bedroom_pct
+        description: "Relative humidity in bedroom (percentage)."
+        data_type: float
+      - name: rh_kitchen_pct
+        description: "Relative humidity in kitchen (percentage)."
+        data_type: float
+      - name: rh_outdoor_pct
+        description: "Outdoor relative humidity (percentage)."
+        data_type: float
+      - name: indoor_temperature_c
+        description: "Indoor temperature (Celsius)."
+        data_type: float
+      - name: outdoor_temperature_c
+        description: "Outdoor temperature (Celsius) reported by IoT device."
+        data_type: float
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [event_timestamp, device_id]
+
+
+

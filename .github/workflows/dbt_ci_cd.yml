@@ -1,0 +1,253 @@
+name: dbt CI/CD Velux Project
+
+permissions:
+  contents: write
+
+on: []
+
+  # push:
+  #   branches:
+  #     - main
+  #     - develop
+  # pull_request:
+  #   branches:
+  #     - main
+  #     - develop
+
+jobs:
+  # ============== CI Job ==============
+  dbt_operations:
+    name: Run dbt CI (Lint, Build, Test)
+    if: github.event_name == 'push' # Only run this GitHub Actions CI job on push events
+    runs-on: ubuntu-latest
+    outputs:
+      manifest_name: ${{ steps.set_manifest_name.outputs.name }}
+      manifest_branch_source: ${{ steps.set_manifest_name.outputs.branch_source }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install dbt, Snowflake adapter, SQLFluff, and dbt templater
+        run: |
+          pip install dbt-snowflake
+          pip install sqlfluff
+          pip install sqlfluff-templater-dbt
+
+      - name: Configure dbt profiles.yml for CI
+        env:
+          DBT_SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          DBT_SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          DBT_SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          DBT_SNOWFLAKE_ROLE: VELUX_DEV
+          DBT_SNOWFLAKE_WAREHOUSE: VELUX_DEV_WH
+          DBT_SNOWFLAKE_DATABASE: VELUX_DEV
+          DBT_SNOWFLAKE_SCHEMA_CI: CI_STAGING_VELUX
+          DBT_SNOWFLAKE_THREADS: 5
+          DBT_TARGET_NAME: dev
+        run: |
+          mkdir -p ~/.dbt
+          echo "
+          velux:
+            target: ${{ env.DBT_TARGET_NAME }}
+            outputs:
+              ${{ env.DBT_TARGET_NAME }}:
+                type: snowflake
+                account: \"${{ env.DBT_SNOWFLAKE_ACCOUNT }}\"
+                user: \"${{ env.DBT_SNOWFLAKE_USER }}\"
+                password: \"${{ env.DBT_SNOWFLAKE_PASSWORD }}\"
+                role: \"${{ env.DBT_SNOWFLAKE_ROLE }}\"
+                warehouse: \"${{ env.DBT_SNOWFLAKE_WAREHOUSE }}\"
+                database: \"${{ env.DBT_SNOWFLAKE_DATABASE }}\"
+                schema: \"${{ env.DBT_SNOWFLAKE_SCHEMA_CI }}\"
+                threads: ${{ env.DBT_SNOWFLAKE_THREADS }}
+                client_session_keep_alive: false
+                query_tag: github_actions_ci_velux
+          " > ~/.dbt/profiles.yml
+          echo "dbt profiles.yml (CI) created for target: ${{ env.DBT_TARGET_NAME }}, schema: ${{ env.DBT_SNOWFLAKE_SCHEMA_CI }}"
+
+      - name: Install dbt project dependencies
+        run: dbt deps
+        working-directory: ./dbt/velux
+
+      - name: Lint SQL files with SQLFluff
+        run: |
+          paths_to_lint="models"
+          if [ -d "snapshots" ]; then
+            paths_to_lint="$paths_to_lint snapshots"
+          else
+            echo "Snapshots directory not found, skipping from lint."
+          fi
+          if [ -d "seeds" ]; then
+            paths_to_lint="$paths_to_lint seeds"
+          else
+            echo "Seeds directory not found, skipping from lint."
+          fi
+          echo "Linting paths: $paths_to_lint"
+          # SQLFluff with dbt templater should auto-discover profile and target
+          # from dbt_project.yml (in working-directory) and profiles.yml (in ~/.dbt/)
+          echo "Attempting to auto-fix SQLFluff violations..."
+          sqlfluff fix $paths_to_lint --show-lint-violations
+          echo "Checking for any remaining SQLFluff violations..."
+          sqlfluff lint $paths_to_lint
+        working-directory: ./dbt/velux
+        continue-on-error: false
+
+      - name: Set manifest variables
+        id: set_manifest_name
+        run: |
+          if [[ "${{ github.base_ref }}" == "develop" || "${{ github.ref_name }}" == "develop" ]]; then
+            echo "name=dbt-manifest-develop" >> $GITHUB_OUTPUT
+            echo "branch_source=develop" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.base_ref }}" == "main" || "${{ github.ref_name }}" == "main" ]]; then
+            echo "name=dbt-manifest-main" >> $GITHUB_OUTPUT
+            echo "branch_source=main" >> $GITHUB_OUTPUT
+          else
+            # Fallback for other branches if PRs can be opened from them to main/develop
+            # Or handle as full run if manifest source is unclear
+            echo "name=dbt-manifest-main" >> $GITHUB_OUTPUT # Default to main manifest
+            echo "branch_source=main" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download existing manifest (for PRs)
+        if: github.event_name == 'pull_request'
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          branch: ${{ steps.set_manifest_name.outputs.branch_source }}
+          name: ${{ steps.set_manifest_name.outputs.name }}
+          path: ./state_manifest
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Check if manifest was downloaded (for PRs)
+        if: github.event_name == 'pull_request'
+        id: check_manifest_exists
+        run: |
+          if [ -f "./state_manifest/manifest.json" ]; then
+            echo "Manifest (${{ steps.set_manifest_name.outputs.name }}.json) found from branch ${{ steps.set_manifest_name.outputs.branch_source }}."
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Manifest not found. CI will run/test all models."
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: dbt seed (CI)
+        run: dbt seed --full-refresh
+        working-directory: ./dbt/velux
+
+      - name: dbt run (CI)
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ] && [ "${{ steps.check_manifest_exists.outputs.exists }}" == "true" ]; then
+            echo "Running dbt with Slim CI (state:modified+ based on ./state_manifest/manifest.json)"
+            dbt run --select state:modified+ --state ./state_manifest
+          else
+            echo "Running dbt for all models (push event or PR without manifest)"
+            dbt run
+          fi
+        working-directory: ./dbt/velux
+
+      - name: dbt test (CI)
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ] && [ "${{ steps.check_manifest_exists.outputs.exists }}" == "true" ]; then
+            echo "Testing dbt with Slim CI (state:modified+ based on ./state_manifest/manifest.json)"
+            dbt test --select state:modified+ --state ./state_manifest
+          else
+            echo "Testing dbt for all models (push event or PR without manifest)"
+            dbt test
+          fi
+        working-directory: ./dbt/velux
+
+      - name: Upload manifest artifact (on push to develop/main)
+        if: success() && github.event_name == 'push' && (github.ref_name == 'develop' || github.ref_name == 'main')
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.set_manifest_name.outputs.name }}
+          path: dbt/velux/target/manifest.json
+          retention-days: 14
+
+  deploy_to_production:
+    name: Deploy dbt models to Production
+    if: github.event_name == 'push' && github.ref_name == 'main' && needs.dbt_operations.result == 'success'
+    needs: [dbt_operations]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install dbt-snowflake
+        run: pip install dbt-snowflake
+
+      - name: Configure dbt profiles.yml for Production
+        env:
+          DBT_SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          DBT_SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          DBT_SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          DBT_SNOWFLAKE_ROLE_PROD: VELUX_PROD_ADMIN
+          DBT_SNOWFLAKE_WAREHOUSE_PROD: VELUX_PROD_WH
+          DBT_SNOWFLAKE_DATABASE_PROD: VELUX_PROD
+          DBT_SNOWFLAKE_SCHEMA_PROD: STAGING
+          DBT_SNOWFLAKE_THREADS_PROD: 5
+        run: |
+          mkdir -p ~/.dbt
+          echo "
+          velux:
+            target: prod
+            outputs:
+              prod:
+                type: snowflake
+                account: \"${{ env.DBT_SNOWFLAKE_ACCOUNT }}\"
+                user: \"${{ env.DBT_SNOWFLAKE_USER }}\"
+                password: \"${{ env.DBT_SNOWFLAKE_PASSWORD }}\"
+                role: \"${{ env.DBT_SNOWFLAKE_ROLE_PROD }}\"
+                warehouse: \"${{ env.DBT_SNOWFLAKE_WAREHOUSE_PROD }}\"
+                database: \"${{ env.DBT_SNOWFLAKE_DATABASE_PROD }}\"
+                schema: \"${{ env.DBT_SNOWFLAKE_SCHEMA_PROD }}\"
+                threads: ${{ env.DBT_SNOWFLAKE_THREADS_PROD }}
+                client_session_keep_alive: false
+                query_tag: github_actions_cd_velux_prod
+          " > ~/.dbt/profiles.yml
+          echo "dbt profiles.yml (Production) created for target: prod"
+
+      - name: Install dbt project dependencies (CD)
+        run: dbt deps --target prod
+        working-directory: ./dbt/velux
+
+      - name: dbt seed (Production)
+        run: dbt seed --target prod --full-refresh
+        working-directory: ./dbt/velux
+
+      - name: dbt run (Production)
+        run: dbt run --target prod
+        working-directory: ./dbt/velux
+
+      - name: dbt test (Production)
+        run: dbt test --target prod
+        working-directory: ./dbt/velux
+
+      - name: Generate dbt docs (Production)
+        run: dbt docs generate --target prod
+        working-directory: ./dbt/velux
+
+      - name: Add .nojekyll
+        run: touch ./dbt/velux/target/.nojekyll
+
+      - name: Deploy dbt docs to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        if: success()
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dbt/velux/target
+          publish_branch: gh-pages
+          user_name: github-actions
+          user_email: github-actions@github.com

@@ -1,0 +1,33 @@
+name: 'velux'
+version: '1.0.0'
+profile: 'velux'
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+docs-paths: ["docs"]
+
+clean-targets:  
+  - "target"
+  - "dbt_packages"
+
+models:
+  velux:
+    +materialized: view
+    +persist_docs:
+      relation: true
+      columns: true
+    +post-hook:
+      - "{{ apply_snowflake_tags() }}"
+      - "{{ grant_select_to_role() }}"
+    
+    staging:
+      +schema: STAGING
+
+    intermediate:
+      +materialized: ephemeral
+      +schema: STAGING
+
+    marts:
+      +materialized: table
+      +schema: MARTS
+      +query_tag: "marts_model_run"

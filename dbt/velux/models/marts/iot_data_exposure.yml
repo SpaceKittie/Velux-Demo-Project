@@ -1,0 +1,64 @@
+version: 2
+
+exposures:
+  - name: velux_iot_marketplace_listing
+    label: "VELUX IoT Data Product (Snowflake Internal Marketplace)"
+    type: application 
+    maturity: high
+    url: "ORGDATACLOUD$INTERNAL$TEST" 
+    description: |
+      Data product published to the Snowflake Internal Marketplace.
+      Contains IoT sensor readings and related dimensions for Product R&D analytics and reporting.
+    
+    depends_on: 
+      - ref('fct_readings')
+      - ref('dim_locations')
+      - ref('dim_sensors')
+      - ref('dim_time')
+    owner:
+      name: Product R&D Data Team
+      email: product-rd-data@example-velux.com 
+    meta:
+      data_product_offering: "Snowflake Internal Marketplace Listing"
+      target_audience: "Internal VELUX data consumers, other domains"
+      usage_examples: 
+        - title: "Accessing IoT Product Data in Snowflake"
+          description: "How to query the shared IoT data product."
+          query: |
+            SELECT l.city, r.sensor_type, AVG(r.sensor_value) AS avg_sensor_value
+            FROM SHARED_VELUX_IOT_DATA.MARTS.fct_readings r
+            JOIN SHARED_VELUX_IOT_DATA.MARTS.dim_locations l ON r.location_id = l.location_id
+            WHERE r.sensor_type = 'temperature_celsius'
+            GROUP BY l.city, r.sensor_type
+            ORDER BY l.city;
+
+  - name: velux_iot_analytics_streamlit_app
+    label: "VELUX IoT Analytics Dashboard (Streamlit)"
+    type: dashboard
+    maturity: high
+    url: "ORGDATACLOUD$INTERNAL$TEST"
+    description: |
+      Interactive Streamlit application for visualizing and analyzing VELUX IoT sensor data 
+      and weather correlations. Used by the Product R&D team for insights.
+    
+    depends_on: 
+      - ref('fct_readings')
+      - ref('dim_locations')
+      - ref('dim_sensors')
+      - ref('dim_time')
+    owner:
+      name: Product R&D Data Team
+      email: product-rd-data@example-velux.com
+    meta:
+      application_type: "Streamlit Dashboard"
+      primary_users: "Product R&D Analysts, Data Scientists"
+      usage_examples: 
+        - title: "Detecting Sensor Anomalies"
+          description: "The app provides visualizations for sensor readings against expected values."
+          query: |
+            SELECT l.city, r.sensor_type, AVG(r.sensor_value) AS avg_sensor_value
+            FROM SHARED_VELUX_IOT_DATA.MARTS.fct_readings r
+            JOIN SHARED_VELUX_IOT_DATA.MARTS.dim_locations l ON r.location_id = l.location_id
+            WHERE r.sensor_type = 'temperature_celsius'
+            GROUP BY l.city, r.sensor_type
+            ORDER BY l.city;

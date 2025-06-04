@@ -1,0 +1,278 @@
+version: 2
+
+models:
+  - name: fct_readings
+    description: "Fact table containing all IoT sensor readings, enriched with weather data and dimensional keys. This model is configured for incremental loading and clustered by event_date."
+    config:
+      contract:
+        enforced: true
+      on_schema_change: append_new_columns 
+    columns:
+      - name: reading_id
+        description: "Surrogate primary key for each reading, generated from event_timestamp and device_id."
+        data_type: text
+        tests:
+          - unique
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: VARCHAR
+      - name: time_id
+        description: "Foreign key referencing the dim_time dimension, linking to detailed time attributes."
+        data_type: text
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_time')
+              field: time_id
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: VARCHAR
+      - name: location_id
+        description: "Foreign key referencing the dim_locations dimension, linking to detailed location attributes."
+        data_type: text
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_locations')
+              field: location_id
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: VARCHAR
+      - name: sensor_id
+        description: "Foreign key referencing the dim_sensors dimension, linking to detailed sensor attributes."
+        data_type: text 
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_sensors')
+              field: sensor_id
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: VARCHAR
+      - name: device_id
+        description: "Identifier for the IoT device that produced the reading."
+        data_type: text
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: VARCHAR
+      - name: event_timestamp
+        description: "The exact timestamp when the sensor event occurred, in UTC."
+        data_type: timestamp_ntz 
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: TIMESTAMP_NTZ
+      - name: event_date
+        description: "The date part of event_timestamp, used for partitioning and clustering."
+        data_type: date
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: DATE
+      - name: sensor_value
+        description: "The actual value recorded by the sensor."
+        data_type: float
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: FLOAT
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: -100
+              max_value: 10000
+      - name: outdoor_temperature_celsius
+        description: "Outdoor temperature in Celsius at the time of the reading."
+        data_type: float
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: -70
+              max_value: 70
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: FLOAT
+      - name: dew_point_temperature_celsius
+        description: "Outdoor dew point temperature in Celsius."
+        data_type: float
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: -70
+              max_value: 70
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: FLOAT
+      - name: mean_sea_level_pressure_hpa
+        description: "Mean sea level air pressure in hPa."
+        data_type: float
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: FLOAT
+      - name: wind_speed_ms
+        description: "Wind speed in meters per second."
+        data_type: float
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: FLOAT
+      - name: visibility_km
+        description: "Visibility in kilometers."
+        data_type: float
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 200
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: FLOAT
+      - name: solar_irradiance_w_m2
+        description: "Solar irradiance in Watts per square meter."
+        data_type: float
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 2000
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: FLOAT
+      - name: uv_index
+        description: "Ultraviolet radiation index."
+        data_type: float
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 15
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: FLOAT
+      - name: sunshine_duration_minutes
+        description: "Duration of sunshine in minutes for the period."
+        data_type: float
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1440
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: FLOAT
+      - name: precipitation_type_description
+        description: "Textual description of the precipitation type (e.g., 'rain', 'snow', 'none')."
+        data_type: text
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: VARCHAR
+
+  - name: dim_locations
+    description: "Dimension table for locations, providing unique city and country combinations."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: location_id
+        description: "Surrogate key for location (city, country)."
+        data_type: text
+        tests:
+          - unique
+          - not_null
+      - name: city
+        description: "Name of the city."
+        data_type: text
+        tests:
+          - not_null
+      - name: country
+        description: "Name of the country."
+        data_type: text
+        tests:
+          - not_null
+
+  - name: dim_sensors
+    description: "Dimension table for sensors, detailing device, room, sensor type, and measurement unit."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: sensor_id
+        description: "Surrogate key for a specific sensor instance (device, room, type)."
+        data_type: text
+        tests:
+          - unique
+          - not_null
+      - name: device_id
+        description: "Identifier of the IoT device."
+        data_type: text
+        tests:
+          - not_null
+      - name: room
+        description: "Room where the sensor is located or 'outdoor'/'indoor' for general device sensors."
+        data_type: text
+        tests:
+          - not_null
+      - name: sensor_type
+        description: "Type of measurement the sensor records (e.g., co2(parts per million), temperature(celsius))."
+        data_type: text
+        tests:
+          - not_null
+      - name: measurement_unit
+        description: "The unit of measurement for the sensor_type (e.g., ppm, %, °C)."
+        data_type: text
+        tests:
+          - not_null
+
+  - name: dim_time
+    description: "Dimension table for time, providing various date and time attributes for each event_timestamp."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: time_id
+        description: "Surrogate key for a unique event_timestamp."
+        data_type: text
+        tests:
+          - unique
+          - not_null
+      - name: event_date
+        description: "Date of the event."
+        data_type: date
+        tests:
+          - not_null
+      - name: event_timestamp
+        description: "Full timestamp of the event."
+        data_type: timestamp_ntz
+        tests:
+          - not_null
+      - name: hour_of_day
+        description: "Hour of the day (0-23)."
+        data_type: integer
+        tests:
+          - not_null
+      - name: day_of_week
+        description: "Day of the week (e.g., 0 for Sunday, 1 for Monday in Snowflake DOW)."
+        data_type: integer
+        tests:
+          - not_null
+      - name: day_of_month
+        description: "Day of the month (1-31)."
+        data_type: integer
+        tests:
+          - not_null
+      - name: month_number
+        description: "Month number (1-12)."
+        data_type: integer
+        tests:
+          - not_null
+      - name: year_number
+        description: "Year (e.g., 2023)."
+        data_type: integer
+        tests:
+          - not_null
+      - name: is_weekend
+        description: "Boolean indicating if the day is a weekend."
+        data_type: boolean
+        tests:
+          - not_null
+      - name: season
+        description: "Meteorological season (Winter, Spring, Summer, Fall)."
+        data_type: text
+        tests:
+          - not_null
+      - name: day_name
+        description: "Name of the day (e.g., Monday, Tuesday)."
+        data_type: text
+        tests:
+          - not_null
+      - name: month_name
+        description: "Name of the month (e.g., January, February)."
+        data_type: text
+        tests:
+          - not_null
+
