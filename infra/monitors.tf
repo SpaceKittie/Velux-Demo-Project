@@ -21,7 +21,7 @@ resource "snowflake_resource_monitor" "dev_wh_guardrail" {
   credit_quota     = 500           
   frequency        = "MONTHLY"     
   notify_triggers  = [50, 90]    
-  start_timestamp  = "2025-07-01 00:00"
+  start_timestamp  = "2025-06-04 13:00"
   suspend_trigger  = 100         
   warehouses       = [snowflake_warehouse.velux_dev_wh.name]
 }
@@ -43,7 +43,7 @@ resource "snowflake_resource_monitor" "prod_wh_guardrail" {
   credit_quota     = 500           
   frequency        = "MONTHLY"     
   notify_triggers  = [50, 90]    
-  start_timestamp  = "2025-07-01 00:00"
+  start_timestamp  = "2025-06-04 13:00"
   suspend_trigger  = 100         
   warehouses       = [snowflake_warehouse.velux_prod_wh.name]
 }
@@ -65,7 +65,7 @@ resource "snowflake_resource_monitor" "analytics_wh_guardrail" {
   credit_quota     = 1000      
   frequency        = "MONTHLY"  
   notify_triggers  = [50, 80, 95]
-  start_timestamp  = "2025-07-01 00:00"
+  start_timestamp  = "2025-06-04 13:00"
   suspend_trigger  = 100         
   warehouses       = [snowflake_warehouse.velux_analytics_wh.name]
 }
