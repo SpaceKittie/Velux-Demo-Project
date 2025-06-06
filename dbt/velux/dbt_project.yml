@@ -19,7 +19,7 @@ models:
     +post-hook:
       - "{{ apply_snowflake_tags() }}"
       - "{{ grant_select_to_role() }}"
-    
+
     staging:
       +schema: STAGING
 
@@ -30,4 +30,4 @@ models:
     marts:
       +materialized: table
       +schema: MARTS
-      +query_tag: "marts_model_run"
+      +query_tag:

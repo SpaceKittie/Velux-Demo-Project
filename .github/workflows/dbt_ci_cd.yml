@@ -3,8 +3,9 @@ name: dbt CI/CD Velux Project
 permissions:
   contents: write
 
-on: []
-
+on:
+  workflow_dispatch: 
+  
   # push:
   #   branches:
   #     - main
@@ -18,7 +19,7 @@ jobs:
   # ============== CI Job ==============
   dbt_operations:
     name: Run dbt CI (Lint, Build, Test)
-    if: github.event_name == 'push' # Only run this GitHub Actions CI job on push events
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     outputs:
       manifest_name: ${{ steps.set_manifest_name.outputs.name }}
@@ -170,6 +171,7 @@ jobs:
           path: dbt/velux/target/manifest.json
           retention-days: 14
 
+  # ============== CD Job ==============
   deploy_to_production:
     name: Deploy dbt models to Production
     if: github.event_name == 'push' && github.ref_name == 'main' && needs.dbt_operations.result == 'success'
