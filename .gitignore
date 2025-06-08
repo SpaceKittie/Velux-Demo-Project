@@ -26,10 +26,13 @@ terraform.rc
 # Ignore lock files
 .terraform.lock.hcl
 
-.env
+**.vscode/*
 
+steamlit.py
 target/
 dbt_packages/
 logs/
 data_prep/
-steamlit.py
+ex.sh
+.env
+

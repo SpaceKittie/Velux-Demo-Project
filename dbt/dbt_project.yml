@@ -30,4 +30,3 @@ models:
     marts:
       +materialized: table
       +schema: MARTS
-      +query_tag:
